@@ -1,0 +1,30 @@
+RC Pair
+Copyright 2026 Rising Creek Construction LLC
+
+RC Pair is licensed under the Functional Source License, Version 1.1, ALv2 Future License
+(FSL-1.1-ALv2). See LICENSE. Each release converts to the Apache License, Version 2.0 two years
+after that release is made available.
+
+This product includes software developed as an independent assembly and documentation layer over
+the projects listed below.
+
+Third-party components:
+
+- iCTRL, https://github.com/OpenMinis/iCTRL, Apache License 2.0.
+  The on-device XCUITest runner and its JSON-RPC API. Used and, where modified, modifications are
+  marked. Copyright held by its authors (OpenMinis).
+
+- idevice, https://github.com/jkcoxson/idevice, MIT License. Copyright 2026 Jackson Coxson.
+  The Linux-side CoreDevice/RemotePairing tunnel, lockdown, and device services.
+
+Prior art referenced for design (no code copied):
+- WebDriverAgent (appium/WebDriverAgent, Apache-2.0), for long-lived test-runner patterns.
+- SideStore, StikDebug and SideInstaller, for the on-device pairing approach (independent
+  implementation).
+
+Developer Disk Image: NOT redistributed or handled by this project. It is Apple's software. Xcode on
+a Mac puts it on the device. Do not host or redistribute Apple binaries.
+
+This project does NOT incorporate, and must not incorporate, code from projects whose license
+restricts building competing or derivative products (for example leeguooooo/iphone-use as of its
+2026-10-11 licensing change). Keep such code out of this repository.

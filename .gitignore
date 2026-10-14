@@ -1,0 +1,31 @@
+# Pulled by scripts/fetch-deps.sh, never vendored
+third_party/
+
+# Never commit Apple binaries
+*.dmg
+*.ipa
+*.mobileprovision
+BuildManifest.plist
+*.dmg.signature
+DeveloperDiskImage/
+DeveloperDiskImage*
+
+# Never commit secrets or signing material
+*.p12
+*.p8
+*.cer
+*.pem
+*.key
+*.rppair.plist
+.secrets/
+*token*.json
+
+# Build junk
+build/
+DerivedData/
+*.xcuserstate
+.DS_Store
+
+internal/
+demo/
+landing/
