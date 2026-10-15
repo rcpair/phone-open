@@ -23,10 +23,10 @@ services the way they already work. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE
   development-signed runner ([OpenMinis/iCTRL](https://github.com/OpenMinis/iCTRL), Apache-2.0) for
   structured UI automation; see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Attribution in
   [NOTICE](NOTICE).
-- **It needs a Mac with Xcode once per device.** Apple's Developer Disk Image comes only with Xcode,
-  and Xcode runs on a Mac. Connect the device to Xcode once and Xcode puts the image on it. After
-  that the Mac is not needed. In our testing the image stayed on after a restart. If it is gone,
-  connect to Xcode again. An iOS update usually means doing it again.
+- **It needs a Mac with Xcode for Apple's disk image.** Apple's Developer Disk Image comes only with
+  Xcode, and Xcode runs on a Mac. Connect the device to Xcode and Xcode puts the image on it. The
+  Mac is not needed to drive the device after that. In our testing the image stayed on after a
+  restart. An iOS update removes it, so connect to Xcode again after each update.
 - **Source only.** We ship no signed binaries and no Apple binaries, and we do not host or supply
   Apple's disk image.
 

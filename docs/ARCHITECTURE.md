@@ -46,7 +46,7 @@ does not.
    its tunnel option.)
 3. **The DDI.** Apple's Developer Disk Image has to be on the device. Connect the device once to
    Xcode on a Mac and Xcode puts it there. In our testing it stayed on after a restart. An iOS update
-   usually means doing it again.
+   removes it, so connect to Xcode again after each update.
 4. **Drive.** Inject taps, drags, typing, and buttons (idevice's `hid`), launch and list apps
    (idevice's `app_service`), and read the screen from the device's own developer stream.
 5. **Decide.** Point your own agent or model at that control layer. It runs on your computer too.
@@ -144,7 +144,8 @@ numbers.
   (MDM) devices an administrator can block it.
 - **The Developer Disk Image** comes only with Xcode, which runs on a Mac. Connect the device to
   Xcode once and Xcode puts the image on it. This project does not ship or host it. In our testing
-  it stayed on after a restart. An iOS update usually means doing it again.
+  it stayed on after a restart. An iOS update removes it, so connect to Xcode again after each
+  update.
 - **Networking.** The device and host reach each other over USB, a LAN, or a VPN such as Tailscale.
   Some developer ports are refused on cellular. mDNS discovery does not cross a VPN, so pair at an
   explicit IP there.
@@ -167,7 +168,8 @@ numbers.
 
 - **The decision layer / agent** that chooses what to tap and recovers from failures. Bring your
   own, such as Claude Code or Codex.
-- **Any Apple binary.** The DDI comes from Xcode on a Mac, once per device.
+- **Any Apple binary.** The DDI comes from Xcode on a Mac, once per device and again after each iOS
+  update.
 - **Any hosted service.** We host nothing and never see your device. You run it on your own computer
   or server. Keeping it alive across reboots and network changes is up to you. This repo does not do
   it for you.
