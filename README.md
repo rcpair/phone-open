@@ -23,10 +23,15 @@ services the way they already work. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE
   development-signed runner ([OpenMinis/iCTRL](https://github.com/OpenMinis/iCTRL), Apache-2.0) for
   structured UI automation; see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Attribution in
   [NOTICE](NOTICE).
-- **It needs a Mac with Xcode for Apple's disk image.** Apple's Developer Disk Image comes only with
-  Xcode, and Xcode runs on a Mac. Connect the device to Xcode and Xcode puts the image on it. The
-  Mac is not needed to drive the device after that. In our testing the image stayed on after a
-  restart. An iOS update removes it, so connect to Xcode again after each update.
+- **It needs Apple's disk image in a folder on your computer.** Apple's Developer Disk Image comes
+  with Xcode. The recommended way to get it is from your own Mac with Xcode:
+  `scripts/ddi-from-xcode.sh` copies it, on the Mac or from your computer over ssh. You can also
+  pull it with `scripts/ddi-from-github.sh` from a public GitHub copy, which is a third party's copy
+  of Apple's file, not published by Apple or by us. That script takes one pinned commit and refuses
+  any file whose SHA-256 differs from the list in this repo. Either way the same files land in the
+  same folder, and the image goes onto the device from there. The Mac is not needed to drive the
+  device. In our testing the image stayed on after a restart. An iOS update removes it, and it goes
+  back on from the same folder.
 - **Source only.** We ship no signed binaries and no Apple binaries, and we do not host or supply
   Apple's disk image.
 
@@ -41,17 +46,18 @@ visibility design is in [docs/CONSENT-DESIGN.md](docs/CONSENT-DESIGN.md).
 
 ## Quick start
 
-You bring: an iPhone or iPad you own, an Apple account, a Linux host, and a Mac with Xcode for one
-setup step per device.
+You bring: an iPhone or iPad you own, an Apple account, a Linux host, and Apple's disk image, best
+copied from a Mac with Xcode (a pinned public GitHub copy works too).
 
 ```bash
 scripts/fetch-deps.sh        # pulls idevice (and optionally iCTRL) at pinned versions
-scripts/connect.sh           # builds the tools and prints the pair -> tunnel -> drive steps
+scripts/ddi-from-xcode.sh    # on your Mac, or --mac you@your-mac from here: the disk image into ~/.rcpair/ddi
+scripts/connect.sh           # builds the tools, fills the image folder if it is still empty, prints the steps
 ```
 
 Then install RC Pair on the device and turn on Developer Mode as it guides you. After the restart,
 pair, run `scripts/rcpair-receive.py` on your computer and scan its QR code with the Camera app.
-Connect the device once to Xcode on a Mac for Apple's disk image, then drive it. The full
+Put Apple's disk image on the device from your image folder, then drive it. The full
 walkthrough, with every manual step and every place it can break, is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

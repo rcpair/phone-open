@@ -6,7 +6,9 @@
 #   - jkcoxson/idevice  (MIT)        the Linux CoreDevice tunnel and device tools (required)
 #   - OpenMinis/iCTRL   (Apache-2.0) optional installed XCUITest runner, only with WITH_ICTRL=1
 #
-# It does NOT fetch Apple's Developer Disk Image. Xcode on a Mac puts that on the device.
+# It does NOT fetch Apple's Developer Disk Image. scripts/ddi-from-xcode.sh (from your own Mac) or
+# scripts/ddi-from-github.sh (a pinned public copy) puts it in your image folder, and scripts/connect.sh
+# runs one of them when that folder is empty.
 set -euo pipefail
 
 ICTRL_REF="${ICTRL_REF:-9fd0a7cc20819a1612f7d62ffbec5989d23f018e}"      # pinned commit; empty = default branch + warn
@@ -41,7 +43,9 @@ fi
 cat <<'NEXT'
 
 Dependencies fetched into ./third_party/.
-Next: turn on Developer Mode on YOUR device as RC Pair guides you, pair, and connect the device
-once to Xcode on a Mac, which puts Apple's Developer Disk Image on it. Then run scripts/connect.sh
-to build the tools and walk tunnel -> drive. See docs/ARCHITECTURE.md.
+Next: turn on Developer Mode on YOUR device as RC Pair guides you, and pair. For Apple's
+Developer Disk Image, run scripts/ddi-from-xcode.sh on your Mac (or with --mac you@your-mac from
+here). Then run scripts/connect.sh to build the tools and walk tunnel -> drive. If your image folder
+is still empty it fills it, from Xcode on this Mac if there is one, otherwise from a pinned public
+GitHub copy. See docs/ARCHITECTURE.md.
 NEXT

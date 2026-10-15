@@ -11,8 +11,8 @@ There are two ways to drive the device. This project centers the first.
 **No-app, direct (what this documents).** Your computer speaks Apple's own on-device developer
 services over a tunnel and drives the phone directly: read the screen, tap, type, swipe, launch
 apps. No automation runner is installed on the phone. The one app, RC Pair, makes the pairing record
-and hands it to your computer. You turn on Developer Mode, pair, and connect the device once to Xcode
-on a Mac, which puts Apple's Developer Disk Image on it. Your computer does the rest. Built on [idevice](https://github.com/jkcoxson/idevice) (MIT).
+and hands it to your computer. You turn on Developer Mode, pair, and give your computer Apple's
+Developer Disk Image (see "The disk image" below). Your computer does the rest. Built on [idevice](https://github.com/jkcoxson/idevice) (MIT).
 
 **Installed runner (optional, more structured).** A development-signed XCUITest app
 ([iCTRL](https://github.com/OpenMinis/iCTRL), Apache-2.0) runs on the phone and exposes a JSON-RPC
@@ -26,7 +26,7 @@ does not.
 ```
   your computer (Linux)                 your iPhone / iPad (your Apple account)
   ---------------------                 --------------------------------------
-  [ your agent / model ]                [ Developer Mode on, paired, DDI from Xcode ]
+  [ your agent / model ]                [ Developer Mode on, paired, DDI mounted    ]
           |                                         ^
   [ control layer ] -- taps/type/launch ---------->|   Apple developer services
           |           <-- screen frames -----------
@@ -44,15 +44,83 @@ does not.
    6-digit code. That is the consent step. (idevice's `pair`.)
 2. **Tunnel.** Open the CoreDevice tunnel to reach the developer services. (idevice's `pair`, with
    its tunnel option.)
-3. **The DDI.** Apple's Developer Disk Image has to be on the device. Connect the device once to
-   Xcode on a Mac and Xcode puts it there. In our testing it stayed on after a restart. An iOS update
-   removes it, so connect to Xcode again after each update.
+3. **The DDI.** Apple's Developer Disk Image has to be on the device. It goes on from an image folder
+   on your computer, filled from Xcode on your Mac or from a pinned public GitHub copy. See "The disk
+   image" below.
 4. **Drive.** Inject taps, drags, typing, and buttons (idevice's `hid`), launch and list apps
    (idevice's `app_service`), and read the screen from the device's own developer stream.
 5. **Decide.** Point your own agent or model at that control layer. It runs on your computer too.
 
-`scripts/connect.sh` builds these tools and prints steps 1-3. Each tool prints its exact options with
+`scripts/connect.sh` builds these tools, fills the image folder if it is empty, and prints steps 1-3. Each tool prints its exact options with
 `-h`; flags can differ by version, so follow `-h` on the version you pulled.
+
+## The disk image
+
+Apple's Developer Disk Image (DDI) carries the developer services that read the screen and take taps.
+It is Apple's file, and this project never ships or hosts it. Since iOS 17 it is a folder: a
+`BuildManifest.plist` plus four image files the manifest names. Apple's signing server personalizes it
+for your device every time it goes on, and the device checks that signature before it mounts it.
+
+Your computer keeps it in one folder, `~/.rcpair/ddi`. Set `RCPAIR_DDI_DIR` to use another folder,
+or `RCPAIR_HOME` to move `~/.rcpair`, or pass `--dir` to the scripts. Everything after the fill reads
+only this folder, so it does not matter which way you filled it.
+
+**From your Mac with Xcode (recommended).** Xcode unpacks the image to
+`/Library/Developer/DeveloperDiskImages/iOS_DDI/Restore` when it prepares a device.
+
+```bash
+scripts/ddi-from-xcode.sh                       # on the Mac
+scripts/ddi-from-xcode.sh --mac you@your-mac    # from your Linux computer, over ssh
+scripts/ddi-from-xcode.sh --from ./Restore      # a Restore folder you copied by hand
+```
+
+If that folder is not on the Mac yet, connect the device to the Mac, open Xcode, wait until
+Window > Devices and Simulators shows it ready, and run the script again.
+
+**From the public GitHub copy.** If you have no Mac at hand:
+
+```bash
+scripts/ddi-from-github.sh
+```
+
+It pulls `PersonalizedImages/Xcode_iOS_DDI_Cryptex` from
+[doronz88/DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage). That repository is a
+third-party copy of Apple's file. Apple does not publish it and neither do we. You run the script
+yourself, and the files go straight from GitHub to your computer. It fetches one pinned commit and
+checks the SHA-256 of every file against `scripts/ddi-sha256.txt` before it reads anything in them. A
+mismatch stops it and nothing is written. To take a newer upstream commit on purpose, run it with
+`--ref <commit> --accept-unpinned`, check the hashes it prints, and update the list in a reviewed
+change.
+
+Both scripts copy only the manifest and the four image files, refuse symlinks, paths outside the
+source folder and oversized files, swap the folder in one step so a failed fill leaves the old one
+as it was, and end with the same line:
+
+```
+Image folder ready: /home/you/.rcpair/ddi (developer disk image build 27A5228h)
+```
+
+Xcode keeps Apple's own file names (three of the files sit under `Firmware/`), while the GitHub copy
+renamed them. The Xcode script therefore checks the four image files by content: the pinned build
+must match the pinned hashes, and a different build from Xcode is accepted with a note.
+
+`scripts/connect.sh` fills the folder for you when it is empty: from Xcode if this computer is a Mac
+that has it, otherwise from the GitHub copy. Set `RCPAIR_DDI_FETCH=0` to stop that.
+
+**Putting it on the device.** Over USB, idevice's tools install it from the folder:
+
+```bash
+third_party/idevice/target/release/idevice-tools --udid <UDID> cryptexd install-ddi ~/.rcpair/ddi
+```
+
+The pinned command-line tools have no command for this over the network. A controller built on the
+idevice library installs it from the same folder over its own tunnel (`idevice::cryptexd::install_ddi`).
+Connecting the device to Xcode on a Mac also puts the image on it directly.
+
+**When it is gone.** In our testing the image stayed on after a restart. An iOS update removes it.
+Put it back from the same folder. The device has to be reachable for that: on USB, or on Wi-Fi with
+your computer on the same network or VPN, and unlocked once since the update. Apple refuses these
+developer ports on cellular. Refill the folder only when a newer iOS needs a newer image.
 
 ## The QR hand-off
 
@@ -142,10 +210,9 @@ numbers.
 
 - **Developer Mode** must be on. You enable it with your passcode; the device reboots. On managed
   (MDM) devices an administrator can block it.
-- **The Developer Disk Image** comes only with Xcode, which runs on a Mac. Connect the device to
-  Xcode once and Xcode puts the image on it. This project does not ship or host it. In our testing
-  it stayed on after a restart. An iOS update removes it, so connect to Xcode again after each
-  update.
+- **The Developer Disk Image** is Apple's file and comes with Xcode. Copy it from Xcode on your Mac,
+  or pull the pinned public GitHub copy. This project does not ship or host it. In our testing it
+  stayed on after a restart. An iOS update removes it, and it goes back on from your image folder.
 - **Networking.** The device and host reach each other over USB, a LAN, or a VPN such as Tailscale.
   Some developer ports are refused on cellular. mDNS discovery does not cross a VPN, so pair at an
   explicit IP there.
@@ -159,7 +226,9 @@ numbers.
 2. Install RC Pair on the device and turn on Developer Mode as it guides you. The device restarts.
 3. Pair in RC Pair, then run `scripts/rcpair-receive.py` and scan its QR code. The pairing record
    lands on your computer.
-4. Connect the device once to Xcode on a Mac, which puts Apple's Developer Disk Image on it.
+4. Fill your image folder: `scripts/ddi-from-xcode.sh` on your Mac (or `--mac you@your-mac` from
+   here), or `scripts/ddi-from-github.sh`. `scripts/connect.sh` does the second if the folder is
+   still empty.
 5. Run `scripts/connect.sh` to build the idevice tools and walk tunnel -> drive. Follow each tool's
    `-h` for exact flags on your pinned version.
 6. Drive the device with the control tools; point your agent at them.
@@ -168,14 +237,14 @@ numbers.
 
 - **The decision layer / agent** that chooses what to tap and recovers from failures. Bring your
   own, such as Claude Code or Codex.
-- **Any Apple binary.** The DDI comes from Xcode on a Mac, once per device and again after each iOS
-  update.
+- **Any Apple binary.** The DDI comes from Xcode on your Mac, or from the GitHub copy you pull
+  yourself, into a folder on your computer. Only hashes of it are in this repository.
 - **Any hosted service.** We host nothing and never see your device. You run it on your own computer
   or server. Keeping it alive across reboots and network changes is up to you. This repo does not do
   it for you.
 
 ## Status
 
-Each step is reproducible but has sharp edges: redoing the Xcode step after an iOS update, cellular port behavior,
+Each step is reproducible but has sharp edges: putting the disk image back after an iOS update, cellular port behavior,
 mDNS not crossing a VPN, network re-pathing, and for the installed-runner path the 7-day signing
 cadence. This is a developer tool, not a turnkey product.

@@ -7,6 +7,8 @@ project, the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.
 Hard rules for pull requests:
 - No third-party code under a license that restricts competing or derivative products (see NOTICE).
 - No Apple binaries (including the Developer Disk Image) and no secrets, tokens, or signing material.
+- A change to `scripts/ddi-sha256.txt` says in the pull request where the new hashes came from
+  (the upstream commit, and Apple's own copy from Xcode where you have it).
 - Do not weaken or remove the consent and visibility features in docs/CONSENT-DESIGN.md.
 - Keep the decision/agent layer out of this repository. Users bring their own. Do not add hosted
   service code. Everything here runs on the user's own computer.
