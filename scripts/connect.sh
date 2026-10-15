@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# connect.sh builds idevice's tools, fills your disk image folder if it is empty, and prints the
-# no-app bring-up steps.
+# connect.sh builds idevice's tools, fills your disk image folder if it has no valid disk image,
+# and prints the no-app bring-up steps.
 #
 # This installs no automation runner on the phone. The only app involved is RC Pair, which
 # makes the pairing record and hands it to your computer. It drives YOUR OWN device, on YOUR OWN
@@ -25,8 +25,9 @@ echo "Available tools:"
 ls "$bin" 2>/dev/null | grep -vE '\.(d|rlib|so|dylib)$' | sed 's/^/  /' || true
 
 # Apple's disk image lives in one folder on this computer; everything after this reads only that
-# folder. Fill it when it is empty: from Xcode if this is a Mac that has it, otherwise from the
-# pinned public GitHub copy (every file SHA-256 checked against scripts/ddi-sha256.txt first).
+# folder. Fill it when it has no valid disk image: from Xcode if this is a Mac that has it,
+# otherwise from the pinned public GitHub copy (every file SHA-256 checked against
+# scripts/ddi-sha256.txt first).
 # RCPAIR_DDI_FETCH=0 skips this and leaves the folder to you.
 # shellcheck source=scripts/ddi-lib.sh
 source "$here/scripts/ddi-lib.sh"
@@ -36,7 +37,7 @@ echo
 if build="$(ddi_ready "$ddi_dir")"; then
   echo "Image folder ready: $ddi_dir (developer disk image build $build)"
 elif [ "${RCPAIR_DDI_FETCH:-1}" = 0 ]; then
-  echo "Image folder $ddi_dir is empty and RCPAIR_DDI_FETCH=0, so it was left alone. See step 2."
+  echo "Image folder $ddi_dir has no valid disk image and RCPAIR_DDI_FETCH=0, so it was left alone. See step 2."
 elif [ "$(uname -s)" = Darwin ] && [ -f "$xcode_ddi/BuildManifest.plist" ]; then
   "$here/scripts/ddi-from-xcode.sh" || echo "Could not copy the disk image from Xcode. See step 2."
 else

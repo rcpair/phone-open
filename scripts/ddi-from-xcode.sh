@@ -19,7 +19,7 @@ Usage:
   scripts/ddi-from-xcode.sh --mac USER@HOST [--dir DIR]     from another computer, over ssh
   scripts/ddi-from-xcode.sh --from RESTORE_DIR [--dir DIR]  from a copied Restore folder
 
---accept-unpinned skips the pinned hashes to review a new image.
+--accept-unpinned skips the pinned hashes to review a new image; requires --dir to a separate folder.
 EOF
 }
 
@@ -53,6 +53,11 @@ if [ "$policy" = unpinned ]; then
   echo 'warning: --accept-unpinned skips the SHA-256 check against scripts/ddi-sha256.txt. Use it only to review a new upstream commit.' >&2
 fi
 target="$(ddi_target "$dir")"
+ddi_review_target "$dir" "$policy"
+ddi_repository_path "$target"
+if [ -n "$src" ]; then
+  ddi_repository_path "$src"
+fi
 xcode_path="${RCPAIR_XCODE_DDI:-/Library/Developer/DeveloperDiskImages/iOS_DDI/Restore}"
 xcode_help="Xcode unpacks it there when it prepares a device: connect your iPhone or iPad to this Mac, open Xcode, and wait until Window > Devices and Simulators shows the device ready. Then run this again. No Mac? scripts/ddi-from-github.sh pulls the same files from a public GitHub copy."
 

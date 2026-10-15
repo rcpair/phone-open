@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Pulls the same files from the public repository doronz88/DeveloperDiskImage.
 # That repository is a third-party copy of Apple's file. Neither Apple nor this
-# project publishes it. You run this yourself; nothing in this project downloads
-# it on its own. The files must match the SHA-256 hashes kept with these scripts.
+# project publishes it. You run this, or scripts/connect.sh runs it when your image
+# folder has no valid disk image (RCPAIR_DDI_FETCH=0 turns that off).
+# The files must match the SHA-256 hashes kept with these scripts.
 # Your phone still has to get the image personalized by Apple before it mounts it.
 set -euo pipefail
 
@@ -15,7 +16,7 @@ usage() {
 Usage: scripts/ddi-from-github.sh [--dir DIR] [--ref REF] [--accept-unpinned]
 
 REF is a branch, tag, or commit (default: the commit in scripts/ddi-sha256.txt).
---accept-unpinned skips the pinned hashes to review a new upstream commit.
+--accept-unpinned skips the pinned hashes to review a new upstream commit; requires --dir to a separate folder.
 RCPAIR_DDI_REPO overrides the repository URL.
 EOF
 }
@@ -48,6 +49,8 @@ if [ "$policy" = unpinned ]; then
 fi
 command -v git >/dev/null 2>&1 || ddi_fail "git is required"
 target="$(ddi_target "$dir")"
+ddi_review_target "$dir" "$policy"
+ddi_repository_path "$target"
 repo="${RCPAIR_DDI_REPO:-https://github.com/doronz88/DeveloperDiskImage.git}"
 cat >&2 <<'EOF'
 Pulling Apple's developer disk image from github.com/doronz88/DeveloperDiskImage.

@@ -8,7 +8,7 @@
 #
 # It does NOT fetch Apple's Developer Disk Image. scripts/ddi-from-xcode.sh (from your own Mac) or
 # scripts/ddi-from-github.sh (a pinned public copy) puts it in your image folder, and scripts/connect.sh
-# runs one of them when that folder is empty.
+# runs one of them when that folder has no valid disk image (RCPAIR_DDI_FETCH=0 turns that off).
 set -euo pipefail
 
 ICTRL_REF="${ICTRL_REF:-9fd0a7cc20819a1612f7d62ffbec5989d23f018e}"      # pinned commit; empty = default branch + warn
@@ -46,6 +46,6 @@ Dependencies fetched into ./third_party/.
 Next: turn on Developer Mode on YOUR device as RC Pair guides you, and pair. For Apple's
 Developer Disk Image, run scripts/ddi-from-xcode.sh on your Mac (or with --mac you@your-mac from
 here). Then run scripts/connect.sh to build the tools and walk tunnel -> drive. If your image folder
-is still empty it fills it, from Xcode on this Mac if there is one, otherwise from a pinned public
-GitHub copy. See docs/ARCHITECTURE.md.
+still has no valid disk image it fills it, from Xcode on this Mac if there is one, otherwise from a
+pinned public GitHub copy. See docs/ARCHITECTURE.md.
 NEXT

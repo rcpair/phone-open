@@ -52,7 +52,7 @@ copied from a Mac with Xcode (a pinned public GitHub copy works too).
 ```bash
 scripts/fetch-deps.sh        # pulls idevice (and optionally iCTRL) at pinned versions
 scripts/ddi-from-xcode.sh    # on your Mac, or --mac you@your-mac from here: the disk image into ~/.rcpair/ddi
-scripts/connect.sh           # builds the tools, fills the image folder if it is still empty, prints the steps
+scripts/connect.sh           # builds the tools, fills the image folder if it has no valid image, prints the steps
 ```
 
 Then install RC Pair on the device and turn on Developer Mode as it guides you. After the restart,

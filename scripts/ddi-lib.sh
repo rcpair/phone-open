@@ -15,6 +15,49 @@ ddi_target() {
   ddi_absolute "${1:-${RCPAIR_DDI_DIR:-${RCPAIR_HOME:-$HOME/.rcpair}/ddi}}"
 }
 
+ddi_review_target() {
+  [ "$2" != unpinned ] || {
+    [ -n "$1" ] && [ "$(ddi_target "$1")" != "$(ddi_target "")" ] ||
+      ddi_fail "--accept-unpinned requires --dir to review into a separate folder, away from the default image folder"
+  }
+}
+
+ddi_repository_path() {
+  local path script_dir tree probe other
+  path="$(ddi_absolute "$1")"
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  tree="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)" || return 0
+  tree="$(ddi_absolute "$tree")"
+  case "$path/" in
+    "$tree/"*) ddi_fail "image files must not live in the repository: $path" ;;
+  esac
+  probe="$path"
+  while [ ! -d "$probe" ]; do
+    probe="$(dirname "$probe")"
+  done
+  other="$(git -C "$probe" rev-parse --show-toplevel 2>/dev/null)" || return 0
+  echo "warning: image folder is inside another git work tree: $path" >&2
+}
+
+ddi_stale_folders() {
+  python3 -I - "$1" <<'PYTHON'
+import os
+import shutil
+import stat
+import sys
+import time
+
+parent = sys.argv[1]
+if os.path.isdir(parent):
+    for entry in os.scandir(parent):
+        if entry.name.startswith((".ddi-new.", ".ddi-old.")):
+            info = entry.stat(follow_symlinks=False)
+            if (stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+                    and info.st_mtime < time.time() - 600):
+                shutil.rmtree(entry.path)
+PYTHON
+}
+
 ddi_manifest() {
   local pins
   pins="${RCPAIR_DDI_PINS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ddi-sha256.txt}"
@@ -130,6 +173,41 @@ def mismatch(path, expected, actual):
     fail("SHA-256 mismatch for " + path + ": expected " + expected + "; actual " + actual)
 
 
+def read_marker(folder):
+    path = ".rcpair-source"
+    if not os.path.lexists(os.path.join(folder, path)):
+        return None
+    filename = regular_file(folder, path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    with os.fdopen(os.open(filename, flags), "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("invalid .rcpair-source: not a regular file")
+        data = stream.read(2049)
+    if len(data) > 2048 or b"\0" in data or b"\r" in data:
+        raise ValueError("invalid .rcpair-source: oversized marker, NUL or carriage return")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("invalid .rcpair-source: not UTF-8") from error
+    lines = (text[:-1] if text.endswith("\n") else text).split("\n")
+    marker = {}
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if (not separator or key not in ("source", "build", "commit")
+                or key in marker or not value or len(value) > 100):
+            raise ValueError("invalid .rcpair-source: unknown or duplicate key, or invalid value")
+        marker[key] = value
+    origin = marker.get("source")
+    if origin not in ("xcode", "github-pinned", "github-unpinned") or "build" not in marker:
+        raise ValueError("invalid .rcpair-source: source and build are required")
+    if origin == "xcode":
+        if "commit" in marker:
+            raise ValueError("invalid .rcpair-source: commit is for GitHub sources only")
+    elif re.fullmatch(r"[0-9a-fA-F]{40}", marker.get("commit", "")) is None:
+        raise ValueError("invalid .rcpair-source: GitHub source needs a 40-hex commit")
+    return marker
+
+
 def check_folder(folder, policy, report=False, expected_hashes=None):
     hashes = {}
     manifest_bytes = None
@@ -160,7 +238,7 @@ def check_folder(folder, policy, report=False, expected_hashes=None):
     except Exception as error:
         fail("cannot read " + manifest_path + ": " + str(error))
     build = manifest.get("ProductBuildVersion", "unknown") if isinstance(manifest, dict) else "unknown"
-    if not isinstance(build, str) or not build or any(c in build for c in "\n\r\0"):
+    if not isinstance(build, str) or not build or len(build) > 100 or any(c in build for c in "\n\r\0"):
         fail("invalid ProductBuildVersion in " + manifest_path)
     identities = manifest.get("BuildIdentities", []) if isinstance(manifest, dict) else []
     identity = None
@@ -213,9 +291,10 @@ def check_folder(folder, policy, report=False, expected_hashes=None):
              + "\n".join(hashes[path] + "  " + path for path in paths))
     hashes = {path: hashes[path] for path in (pinned_hashes if policy == "strict" else files)}
     if report:
-        if policy == "xcode" and not payloads_match:
-            print("note: build " + build + " from Xcode is not the pinned build " + pinned_build
-                  + "; accepted because it came from Xcode on your Mac", file=sys.stderr)
+        if policy == "xcode" and build != pinned_build:
+            print("note: Build " + build + " is not the pinned build " + pinned_build
+                  + ". Accepted without a hash check against the pinned list, "
+                  "because it came from Xcode.", file=sys.stderr)
         elif policy == "unpinned":
             if commit:
                 print("# commit " + commit, file=sys.stderr)
@@ -223,6 +302,34 @@ def check_folder(folder, policy, report=False, expected_hashes=None):
             for path, digest in hashes.items():
                 print(digest + "  " + path, file=sys.stderr)
     return build, hashes
+
+
+def replaceable_folder(folder):
+    if not os.path.isdir(folder):
+        fail("target is not a folder: " + folder)
+    if not os.listdir(folder):
+        return
+    try:
+        if read_marker(folder) is not None:
+            return
+    except (OSError, ValueError):
+        pass
+    _, hashes = check_folder(folder, "unpinned")
+    files = {os.path.normpath(path) for path in hashes} | {".rcpair-source"}
+    directories = set()
+    for path in hashes:
+        parent = os.path.dirname(os.path.normpath(path))
+        while parent:
+            directories.add(parent)
+            parent = os.path.dirname(parent)
+    for root, dirs, names in os.walk(folder, onerror=lambda error: fail(str(error))):
+        for name in dirs + names:
+            filename = os.path.join(root, name)
+            relative = os.path.relpath(filename, folder)
+            info = os.lstat(filename)
+            if not ((stat.S_ISDIR(info.st_mode) and relative in directories)
+                    or (stat.S_ISREG(info.st_mode) and relative in files)):
+                fail("refusing to replace a non-image folder: " + folder)
 
 
 try:
@@ -239,6 +346,22 @@ try:
         source = args[0] if args else ""
         commit = args[1] if len(args) > 1 else ""
         pinned_commit, pinned_build, pinned_hashes = read_pins(pins_file)
+        if mode == "replaceable":
+            replaceable_folder(folder)
+            sys.exit(0)
+        if mode == "check":
+            marker = read_marker(folder)
+            if marker is not None and marker["source"] == "xcode":
+                policy = "xcode"
+            elif marker is not None and marker["source"] == "github-pinned":
+                policy = "strict"
+            elif marker is None and all(os.path.lexists(os.path.join(folder, path))
+                                        for path in pinned_hashes):
+                policy = "strict"
+            elif marker is not None and marker["source"] == "github-unpinned":
+                fail("github-unpinned image folder is for review only and is not ready: " + folder)
+            else:
+                fail("image folder has no valid .rcpair-source marker or pinned file set: " + folder)
         if mode == "stage":
             _, hashes = check_folder(folder, policy)
             for path in hashes:
@@ -247,8 +370,19 @@ try:
                 os.makedirs(os.path.dirname(destination), exist_ok=True)
                 shutil.copyfile(filename, destination)
             build, _ = check_folder(staging, policy, report=True, expected_hashes=hashes)
+            origin = "xcode"
+            if commit:
+                origin = "github-unpinned" if policy == "unpinned" else "github-pinned"
+            marker = "source=" + origin + "\nbuild=" + build + "\n"
+            if commit:
+                marker += "commit=" + commit + "\n"
+            with open(os.path.join(staging, ".rcpair-source"), "w", encoding="utf-8") as stream:
+                stream.write(marker)
+            read_marker(staging)
         elif mode in ("check", "validate"):
             build, _ = check_folder(folder, policy, report=mode == "check")
+            if mode == "check" and marker is not None and marker["build"] != build:
+                fail(".rcpair-source build differs from BuildManifest.plist: " + folder)
         else:
             fail("unknown manifest check mode: " + mode)
         print(build)
@@ -258,7 +392,7 @@ PYTHON
 }
 
 ddi_ready() {
-  if ddi_manifest check "$1" xcode 2>/dev/null; then
+  if ddi_manifest check "$1" xcode; then
     return 0
   else
     return 1
@@ -271,18 +405,16 @@ ddi_install() (
   policy="$3"
   source_description="${4:-}"
   commit="${5:-}"
+  parent="$(dirname "$target")"
+  ddi_stale_folders "$parent"
   [ "$(ddi_absolute "$src")" != "$target" ] || ddi_fail "source and target are the same folder: $target"
   if [ -e "$target" ]; then
-    [ -d "$target" ] || ddi_fail "target is not a folder: $target"
-    if [ ! -f "$target/BuildManifest.plist" ]; then
-      entries="$(ls -A "$target")" || ddi_fail "cannot read target folder: $target"
-      [ -z "$entries" ] || ddi_fail "refusing to replace a non-image folder: $target"
-    fi
+    ddi_manifest replaceable "$target" unpinned >/dev/null ||
+      ddi_fail "refusing to replace a non-image folder: $target"
   fi
 
   ddi_manifest validate "$src" "$policy" "$source_description" "$commit" >/dev/null
 
-  parent="$(dirname "$target")"
   rcpair_home="$(ddi_absolute "${RCPAIR_HOME:-$HOME/.rcpair}")"
   home_missing=false
   [ -e "$rcpair_home" ] || home_missing=true

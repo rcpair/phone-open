@@ -51,7 +51,7 @@ does not.
    (idevice's `app_service`), and read the screen from the device's own developer stream.
 5. **Decide.** Point your own agent or model at that control layer. It runs on your computer too.
 
-`scripts/connect.sh` builds these tools, fills the image folder if it is empty, and prints steps 1-3. Each tool prints its exact options with
+`scripts/connect.sh` builds these tools, fills the image folder if it has no valid disk image, and prints steps 1-3. Each tool prints its exact options with
 `-h`; flags can differ by version, so follow `-h` on the version you pulled.
 
 ## The disk image
@@ -85,16 +85,19 @@ scripts/ddi-from-github.sh
 
 It pulls `PersonalizedImages/Xcode_iOS_DDI_Cryptex` from
 [doronz88/DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage). That repository is a
-third-party copy of Apple's file. Apple does not publish it and neither do we. You run the script
-yourself, and the files go straight from GitHub to your computer. It fetches one pinned commit and
-checks the SHA-256 of every file against `scripts/ddi-sha256.txt` before it reads anything in them. A
-mismatch stops it and nothing is written. To take a newer upstream commit on purpose, run it with
-`--ref <commit> --accept-unpinned`, check the hashes it prints, and update the list in a reviewed
-change.
+third-party copy of Apple's file. Apple does not publish it and neither do we. The files go straight
+from GitHub to your computer, when you run the script or when `scripts/connect.sh` runs it for you
+(below). It fetches one pinned commit and checks the SHA-256 of every file against
+`scripts/ddi-sha256.txt` before it parses any of them. A mismatch stops it and nothing is written. To
+review a newer upstream commit, run it with `--ref <commit> --accept-unpinned --dir <another folder>`,
+check the hashes it prints, and update the list in a reviewed change. An unpinned copy never goes into
+your image folder.
 
-Both scripts copy only the manifest and the four image files, refuse symlinks, paths outside the
-source folder and oversized files, swap the folder in one step so a failed fill leaves the old one
-as it was, and end with the same line:
+Both scripts copy only the manifest and the four image files and refuse symlinks, paths outside the
+source folder and oversized files. They swap the new copy in only after every check passes, so a
+failed fill leaves the old one in place, and they replace only a folder that already holds a disk
+image. Each records where its copy came from in `.rcpair-source` inside the folder, and both end
+with a line like:
 
 ```
 Image folder ready: /home/you/.rcpair/ddi (developer disk image build 27A5228h)
@@ -104,8 +107,8 @@ Xcode keeps Apple's own file names (three of the files sit under `Firmware/`), w
 renamed them. The Xcode script therefore checks the four image files by content: the pinned build
 must match the pinned hashes, and a different build from Xcode is accepted with a note.
 
-`scripts/connect.sh` fills the folder for you when it is empty: from Xcode if this computer is a Mac
-that has it, otherwise from the GitHub copy. Set `RCPAIR_DDI_FETCH=0` to stop that.
+`scripts/connect.sh` fills the folder for you when it has no valid disk image: from Xcode if this
+computer is a Mac that has it, otherwise from the GitHub copy. Set `RCPAIR_DDI_FETCH=0` to stop that.
 
 **Putting it on the device.** Over USB, idevice's tools install it from the folder:
 
@@ -119,8 +122,8 @@ Connecting the device to Xcode on a Mac also puts the image on it directly.
 
 **When it is gone.** In our testing the image stayed on after a restart. An iOS update removes it.
 Put it back from the same folder. The device has to be reachable for that: on USB, or on Wi-Fi with
-your computer on the same network or VPN, and unlocked once since the update. Apple refuses these
-developer ports on cellular. Refill the folder only when a newer iOS needs a newer image.
+your computer on the same network or VPN. Some developer ports are refused on cellular. Refill the
+folder only when a newer iOS needs a newer image.
 
 ## The QR hand-off
 
@@ -227,8 +230,8 @@ numbers.
 3. Pair in RC Pair, then run `scripts/rcpair-receive.py` and scan its QR code. The pairing record
    lands on your computer.
 4. Fill your image folder: `scripts/ddi-from-xcode.sh` on your Mac (or `--mac you@your-mac` from
-   here), or `scripts/ddi-from-github.sh`. `scripts/connect.sh` does the second if the folder is
-   still empty.
+   here), or `scripts/ddi-from-github.sh`. `scripts/connect.sh` does the second if the folder still
+   has no valid disk image.
 5. Run `scripts/connect.sh` to build the idevice tools and walk tunnel -> drive. Follow each tool's
    `-h` for exact flags on your pinned version.
 6. Drive the device with the control tools; point your agent at them.
@@ -237,8 +240,8 @@ numbers.
 
 - **The decision layer / agent** that chooses what to tap and recovers from failures. Bring your
   own, such as Claude Code or Codex.
-- **Any Apple binary.** The DDI comes from Xcode on your Mac, or from the GitHub copy you pull
-  yourself, into a folder on your computer. Only hashes of it are in this repository.
+- **Any Apple binary.** The DDI comes from Xcode on your Mac, or from the GitHub copy your computer
+  pulls, into a folder on your computer. Only hashes of it are in this repository.
 - **Any hosted service.** We host nothing and never see your device. You run it on your own computer
   or server. Keeping it alive across reboots and network changes is up to you. This repo does not do
   it for you.

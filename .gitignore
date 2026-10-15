@@ -7,6 +7,14 @@ third_party/
 *.mobileprovision
 BuildManifest.plist
 *.dmg.signature
+*.dmg.*
+*.trustcache
+*.cryptex_info
+*.root_hash
+Restore/
+.rcpair/
+ddi/
+.rcpair-source
 DeveloperDiskImage/
 DeveloperDiskImage*
 
