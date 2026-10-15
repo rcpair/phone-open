@@ -1,0 +1,14 @@
+# SHA-256 of Apple's developer disk image files at one pinned commit of the public GitHub copy
+# github.com/doronz88/DeveloperDiskImage, folder PersonalizedImages/Xcode_iOS_DDI_Cryptex.
+# Hashes only. The files themselves are never in this repository.
+# scripts/ddi-from-github.sh fetches this commit and refuses any file whose hash differs.
+# scripts/ddi-from-xcode.sh compares the four payload hashes, independent of file names.
+# To move to a newer upstream commit, run scripts/ddi-from-github.sh --ref <commit> --accept-unpinned,
+# check what it prints, and replace the lines below in a reviewed change.
+# commit 6eae353ae694bda1c421d4a3eee5459ae59c99a1
+# build 27A5228h
+27385d7582b03b36bb3104e22b520aee0c47d72fecb4e8ecfe12ef5d966c7012  BuildManifest.plist
+873097f695a8b9734e2abc54f795a8874d40ff6fd11208ecb01ef29534c7c176  Image.dmg
+f7f21986074eee03a215aca16ecfc78d6bf183600d8a0d2fb691f9896782e6f0  Image.dmg.trustcache
+edf49aef55aacc063d4d7be05b713bb545ce2993b3f62bcc15eccd75e610ee6c  Image.dmg.cryptex_info
+3543fad2805b88119695c417e12679380b3b5a2742994bbcc839c8e2de5d7302  Image.dmg.root_hash
