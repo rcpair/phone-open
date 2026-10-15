@@ -288,7 +288,7 @@ class DdiScriptsTests(unittest.TestCase):
         self.assertIn("third-party copy", result.stderr)
         self.assertIn(f"Pulling Apple's developer disk image from {self.env['RCPAIR_DDI_REPO']} "
                       f"at ref {sha}.\n", result.stderr)
-        self.assertIn("a third-party copy of Apple's file; neither Apple nor this project "
+        self.assertIn("a third-party copy of Apple's file. Neither Apple nor this project "
                       "publishes it", result.stderr)
         self.assertIn(f"From {self.env['RCPAIR_DDI_REPO']} at commit {sha}", result.stderr)
         self.assertEqual(sorted(self.root.iterdir()),

@@ -66,7 +66,7 @@ case "$repo" in
   *) ddi_fail "RCPAIR_DDI_REPO must start with https://" ;;
 esac
 printf "Pulling Apple's developer disk image from %s at ref %s.\n" "$repo" "$ref" >&2
-echo "This is a third-party copy of Apple's file; neither Apple nor this project publishes it." >&2
+echo "This is a third-party copy of Apple's file. Neither Apple nor this project publishes it." >&2
 echo 'The recommended source is Xcode on your own Mac: scripts/ddi-from-xcode.sh' >&2
 
 tmp="$(mktemp -d)"
