@@ -34,9 +34,10 @@ source "$here/scripts/ddi-lib.sh"
 ddi_dir="$(ddi_target "")"
 xcode_ddi="${RCPAIR_XCODE_DDI:-/Library/Developer/DeveloperDiskImages/iOS_DDI/Restore}"
 echo
-if build="$(ddi_ready "$ddi_dir")"; then
+if build="$(ddi_ready "$ddi_dir" 2>/dev/null)"; then
   echo "Image folder ready: $ddi_dir (developer disk image build $build)"
 elif [ "${RCPAIR_DDI_FETCH:-1}" = 0 ]; then
+  ddi_ready "$ddi_dir" >/dev/null || true
   echo "Image folder $ddi_dir has no valid disk image and RCPAIR_DDI_FETCH=0, so it was left alone. See step 2."
 elif [ "$(uname -s)" = Darwin ] && [ -f "$xcode_ddi/BuildManifest.plist" ]; then
   "$here/scripts/ddi-from-xcode.sh" || echo "Could not copy the disk image from Xcode. See step 2."

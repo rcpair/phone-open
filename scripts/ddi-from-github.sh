@@ -52,11 +52,22 @@ target="$(ddi_target "$dir")"
 ddi_review_target "$dir" "$policy"
 ddi_repository_path "$target"
 repo="${RCPAIR_DDI_REPO:-https://github.com/doronz88/DeveloperDiskImage.git}"
-cat >&2 <<'EOF'
-Pulling Apple's developer disk image from github.com/doronz88/DeveloperDiskImage.
-That is a third-party copy of Apple's file, not published by Apple or by this project.
-The recommended source is Xcode on your own Mac: scripts/ddi-from-xcode.sh
-EOF
+case "$repo" in
+  https://*)
+    if [ "$policy" != unpinned ] &&
+        ! [[ "$repo" =~ ^https://github[.]com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+      ddi_fail "RCPAIR_DDI_REPO must be https://github.com/<owner>/<repo> (optionally with .git), or use --accept-unpinned"
+    fi
+    ;;
+  file://*)
+    # The file:// exception exists for the test suite.
+    [ "${RCPAIR_DDI_TEST_ALLOW_FILE_REPO:-0}" = 1 ] || ddi_fail "RCPAIR_DDI_REPO must start with https://"
+    ;;
+  *) ddi_fail "RCPAIR_DDI_REPO must start with https://" ;;
+esac
+printf "Pulling Apple's developer disk image from %s at ref %s.\n" "$repo" "$ref" >&2
+echo "This is a third-party copy of Apple's file; neither Apple nor this project publishes it." >&2
+echo 'The recommended source is Xcode on your own Mac: scripts/ddi-from-xcode.sh' >&2
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

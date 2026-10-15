@@ -59,7 +59,7 @@ if [ -n "$src" ]; then
   ddi_repository_path "$src"
 fi
 xcode_path="${RCPAIR_XCODE_DDI:-/Library/Developer/DeveloperDiskImages/iOS_DDI/Restore}"
-xcode_help="Xcode unpacks it there when it prepares a device: connect your iPhone or iPad to this Mac, open Xcode, and wait until Window > Devices and Simulators shows the device ready. Then run this again. No Mac? scripts/ddi-from-github.sh pulls the same files from a public GitHub copy."
+xcode_help="Xcode unpacks it there when it prepares a device: connect your iPhone or iPad to this Mac, open Xcode, and wait until Window > Devices and Simulators shows the device ready. Then run this again. Or run scripts/ddi-from-github.sh for a third-party copy of Apple's file from GitHub, checked against the pinned hashes."
 
 if [ -n "$host" ]; then
   tmp="$(mktemp -d)"

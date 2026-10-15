@@ -3,7 +3,8 @@
 # Hashes only. The files themselves are never in this repository.
 # scripts/ddi-from-github.sh fetches this commit and refuses any file whose hash differs.
 # scripts/ddi-from-xcode.sh compares the four payload hashes, independent of file names.
-# To move to a newer upstream commit, run scripts/ddi-from-github.sh --ref <commit> --accept-unpinned,
+# To move to a newer upstream commit, run
+#   scripts/ddi-from-github.sh --ref <commit> --accept-unpinned --dir <another folder>
 # check what it prints, and replace the lines below in a reviewed change.
 # commit 6eae353ae694bda1c421d4a3eee5459ae59c99a1
 # build 27A5228h

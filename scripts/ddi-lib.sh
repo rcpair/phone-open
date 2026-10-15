@@ -25,12 +25,17 @@ ddi_review_target() {
 ddi_repository_path() {
   local path script_dir tree probe other
   path="$(ddi_absolute "$1")"
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  tree="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)" || return 0
-  tree="$(ddi_absolute "$tree")"
-  case "$path/" in
-    "$tree/"*) ddi_fail "image files must not live in the repository: $path" ;;
-  esac
+  script_dir="$(ddi_absolute "$(dirname "${BASH_SOURCE[0]}")")"
+  tree="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)" || tree=''
+  if [ -n "$tree" ]; then
+    tree="$(ddi_absolute "$tree")"
+    if [ "$tree/scripts" = "$script_dir" ] &&
+        git -C "$tree" ls-files --error-unmatch -- scripts/ddi-lib.sh >/dev/null 2>&1; then
+      case "$path/" in
+        "$tree/"*) ddi_fail "image files must not live in the repository: $path" ;;
+      esac
+    fi
+  fi
   probe="$path"
   while [ ! -d "$probe" ]; do
     probe="$(dirname "$probe")"
@@ -40,7 +45,14 @@ ddi_repository_path() {
 }
 
 ddi_stale_folders() {
-  python3 -I - "$1" <<'PYTHON'
+  local old
+  while IFS= read -r -d '' old; do
+    if [ ! -e "$2" ] && [ ! -L "$2" ] &&
+        ddi_manifest check "$old" xcode >/dev/null 2>&1; then
+      mv "$old" "$2"
+      break
+    fi
+  done < <(python3 -I - "$1" <<'PYTHON'
 import os
 import shutil
 import stat
@@ -48,14 +60,20 @@ import sys
 import time
 
 parent = sys.argv[1]
+old = []
 if os.path.isdir(parent):
     for entry in os.scandir(parent):
         if entry.name.startswith((".ddi-new.", ".ddi-old.")):
             info = entry.stat(follow_symlinks=False)
-            if (stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
-                    and info.st_mtime < time.time() - 600):
-                shutil.rmtree(entry.path)
+            if stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid():
+                if entry.name.startswith(".ddi-old."):
+                    old.append((info.st_mtime, entry.path))
+                elif info.st_mtime < time.time() - 600:
+                    shutil.rmtree(entry.path)
+for _, path in sorted(old, reverse=True):
+    sys.stdout.buffer.write(os.fsencode(path) + b"\0")
 PYTHON
+  )
 }
 
 ddi_manifest() {
@@ -309,11 +327,6 @@ def replaceable_folder(folder):
         fail("target is not a folder: " + folder)
     if not os.listdir(folder):
         return
-    try:
-        if read_marker(folder) is not None:
-            return
-    except (OSError, ValueError):
-        pass
     _, hashes = check_folder(folder, "unpinned")
     files = {os.path.normpath(path) for path in hashes} | {".rcpair-source"}
     directories = set()
@@ -406,7 +419,7 @@ ddi_install() (
   source_description="${4:-}"
   commit="${5:-}"
   parent="$(dirname "$target")"
-  ddi_stale_folders "$parent"
+  ddi_stale_folders "$parent" "$target"
   [ "$(ddi_absolute "$src")" != "$target" ] || ddi_fail "source and target are the same folder: $target"
   if [ -e "$target" ]; then
     ddi_manifest replaceable "$target" unpinned >/dev/null ||
@@ -445,10 +458,11 @@ ddi_install() (
   fi
   mv "$staging" "$target"
   staging=''
-  if [ -n "$old" ]; then
-    rm -rf "$old"
-    old=''
-  fi
+  for backup in "$parent"/.ddi-old.*; do
+    [ -d "$backup" ] && [ ! -L "$backup" ] && [ -O "$backup" ] || continue
+    rm -rf "$backup"
+  done
+  old=''
   printf 'Image folder ready: %s (developer disk image build %s)\n' "$target" "$build"
   echo 'Next: put it on the device. See "The disk image" in docs/ARCHITECTURE.md.'
 )

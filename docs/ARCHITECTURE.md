@@ -71,7 +71,7 @@ only this folder, so it does not matter which way you filled it.
 ```bash
 scripts/ddi-from-xcode.sh                       # on the Mac
 scripts/ddi-from-xcode.sh --mac you@your-mac    # from your Linux computer, over ssh
-scripts/ddi-from-xcode.sh --from ./Restore      # a Restore folder you copied by hand
+scripts/ddi-from-xcode.sh --from ~/Restore      # a Restore folder you copied by hand, outside this repo
 ```
 
 If that folder is not on the Mac yet, connect the device to the Mac, open Xcode, wait until

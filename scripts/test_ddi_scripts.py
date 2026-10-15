@@ -24,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 XCODE = HERE / "ddi-from-xcode.sh"
 GITHUB = HERE / "ddi-from-github.sh"
 LIB = HERE / "ddi-lib.sh"
+CONNECT = HERE / "connect.sh"
 KEYS = ("Cryptex1,GenericDmg", "Cryptex1,GenericTrustCache",
         "Cryptex1,CryptexInfoPlist", "Cryptex1,GenericVolume")
 PAYLOADS = {
@@ -77,7 +78,7 @@ class DdiScriptsTests(unittest.TestCase):
         self.home.mkdir()
         self.env = os.environ.copy()
         for name in ("RCPAIR_HOME", "RCPAIR_DDI_DIR", "RCPAIR_XCODE_DDI", "RCPAIR_DDI_REPO",
-                     "RCPAIR_DDI_PINS"):
+                     "RCPAIR_DDI_PINS", "RCPAIR_DDI_TEST_ALLOW_FILE_REPO", "RCPAIR_DDI_FETCH"):
             self.env.pop(name, None)
         self.env.update(HOME=str(self.home), TMPDIR=str(self.root),
                         GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
@@ -86,11 +87,12 @@ class DdiScriptsTests(unittest.TestCase):
         self.checkout = self.root / "script-repo"
         scripts = self.checkout / "scripts"
         scripts.mkdir(parents=True)
-        for path in (XCODE, GITHUB, LIB, HERE / "ddi-sha256.txt"):
+        for path in (XCODE, GITHUB, LIB, CONNECT, HERE / "ddi-sha256.txt"):
             shutil.copy2(path, scripts / path.name)
         shutil.copy2(HERE.parent / ".gitignore", self.checkout / ".gitignore")
         if shutil.which("git"):
             self.git("init", "--quiet", self.checkout)
+            self.git("-C", self.checkout, "add", "scripts/ddi-lib.sh")
         self.lib = scripts / LIB.name
         self.source = self.root / "Restore folder's"
         self.manifest = fake_restore(self.source)
@@ -146,6 +148,7 @@ class DdiScriptsTests(unittest.TestCase):
                  "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Fake image fixture")
         self.git("-C", repo, "config", "uploadpack.allowFilter", "true")
         self.env["RCPAIR_DDI_REPO"] = repo.as_uri()
+        self.env["RCPAIR_DDI_TEST_ALLOW_FILE_REPO"] = "1"
         sha = self.git("-C", repo, "rev-parse", "HEAD")
         self.write_pins(sha)
         return sha
@@ -283,6 +286,10 @@ class DdiScriptsTests(unittest.TestCase):
         result = self.run_script(GITHUB)
         self.assert_ready(result, self.target, "github-pinned", sha)
         self.assertIn("third-party copy", result.stderr)
+        self.assertIn(f"Pulling Apple's developer disk image from {self.env['RCPAIR_DDI_REPO']} "
+                      f"at ref {sha}.\n", result.stderr)
+        self.assertIn("a third-party copy of Apple's file; neither Apple nor this project "
+                      "publishes it", result.stderr)
         self.assertIn(f"From {self.env['RCPAIR_DDI_REPO']} at commit {sha}", result.stderr)
         self.assertEqual(sorted(self.root.iterdir()),
                          sorted([self.home, self.source, self.pins, self.checkout,
@@ -292,6 +299,76 @@ class DdiScriptsTests(unittest.TestCase):
     def test_github_full_sha(self):
         sha = self.fixture_repo()
         self.assert_ready(self.run_script(GITHUB, "--ref", sha), self.target, "github-pinned", sha)
+
+    def test_github_repository_urls_are_refused(self):
+        for repo in ("http://github.com/owner/repo.git", "ssh://github.com/owner/repo.git",
+                     "https://example.com/x.git", "https://github.com.example.com/owner/repo",
+                     "https://github.com@elsewhere.invalid/owner/repo",
+                     "https://github.com/owner/repo/extra", "https://github.com/owner/repo?query",
+                     "https://github.com:443/owner/repo", self.source.as_uri()):
+            for override in ((), ("--accept-unpinned", "--dir", self.root / "review")):
+                if repo.startswith("https://") and override:
+                    continue
+                with self.subTest(repo=repo, override=override):
+                    self.env["RCPAIR_DDI_REPO"] = repo
+                    before = sorted(self.root.iterdir())
+                    result = self.run_script(GITHUB, *override)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("RCPAIR_DDI_REPO must", result.stderr)
+                    self.assertNotIn("Pulling", result.stderr)
+                    self.assertEqual(sorted(self.root.iterdir()), before)
+                    self.assertFalse(self.target.exists())
+
+    @unittest.skipUnless(shutil.which("git"), "git is not installed")
+    def test_github_notice_names_override_url_and_ref(self):
+        sha = self.fixture_repo()
+        result = self.run_script(GITHUB, "--ref", "main")
+        self.assert_ready(result, self.target, "github-pinned", sha)
+        self.assertIn(f"Pulling Apple's developer disk image from {self.env['RCPAIR_DDI_REPO']} "
+                      "at ref main.\n", result.stderr)
+
+    @unittest.skipUnless(shutil.which("git"), "git is not installed")
+    def test_github_https_repository_urls(self):
+        sha = self.fixture_repo()
+        for repo, override in (("https://github.com/owner/repo", ()),
+                               ("https://github.com/owner/repo.git", ()),
+                               ("https://example.com/x.git", ("--accept-unpinned",))):
+            with self.subTest(repo=repo):
+                env = self.env.copy()
+                env.pop("RCPAIR_DDI_TEST_ALLOW_FILE_REPO")
+                env.update(RCPAIR_DDI_REPO=repo, GIT_CONFIG_COUNT="1",
+                           GIT_CONFIG_KEY_0=f"url.{self.env['RCPAIR_DDI_REPO']}.insteadOf",
+                           GIT_CONFIG_VALUE_0=repo)
+                target = self.root / "review" if override else self.target
+                result = self.run_script(GITHUB, *override, "--dir", target, env=env)
+                self.assert_ready(result, target,
+                                  "github-unpinned" if override else "github-pinned", sha)
+                self.assertIn(f"Pulling Apple's developer disk image from {repo} at ref {sha}.\n",
+                              result.stderr)
+
+    @unittest.skipUnless(shutil.which("git"), "git is not installed")
+    def test_connect_first_run_probe_is_quiet(self):
+        self.fixture_repo()
+        (self.checkout / "third_party/idevice/target/release").mkdir(parents=True)
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        cargo = fake_bin / "cargo"
+        cargo.write_text("#!/usr/bin/env bash\nexit 0\n")
+        cargo.chmod(0o755)
+        self.env["PATH"] = str(fake_bin) + os.pathsep + self.env["PATH"]
+        self.env["RCPAIR_XCODE_DDI"] = str(self.root / "missing-xcode-image")
+        result = self.run_script(CONNECT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Image folder ready:", result.stdout)
+        self.assertNotIn("Refusing to use these files", result.stderr)
+        shutil.rmtree(self.target)
+        self.env["RCPAIR_DDI_FETCH"] = "0"
+        result = self.run_script(CONNECT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr.count("Refusing to use these files"), 1)
+        self.assertIn("no valid .rcpair-source marker or pinned file set", result.stderr)
+        self.assertIn("RCPAIR_DDI_FETCH=0", result.stdout)
+        self.assertFalse(self.target.exists())
 
     @unittest.skipUnless(shutil.which("git"), "git is not installed")
     def test_both_sources_identical(self):
@@ -330,7 +407,6 @@ class DdiScriptsTests(unittest.TestCase):
     def test_successful_refill_replaces_old_folder(self):
         self.target = self.root / "review"
         self.assert_ready(self.run_script(XCODE, "--from", self.source, "--dir", self.target), self.target)
-        (self.target / "stale.txt").write_bytes(b"old extra file")
         (self.source / "Image.dmg").write_bytes(b"new fake image")
         self.expected["Image.dmg"] = b"new fake image"
         self.assert_ready(self.run_script(XCODE, "--from", self.source, "--accept-unpinned",
@@ -877,6 +953,18 @@ class DdiScriptsTests(unittest.TestCase):
                 if (self.target / "Firmware").exists():
                     (self.target / "Firmware").rmdir()
 
+    def test_marked_image_target_with_extra_file_is_refused(self):
+        self.assert_ready(self.run_script(XCODE, "--from", self.source), self.target)
+        (self.target / "UDID.rppair.plist").write_bytes(b"keep these exact bytes\0\xff")
+        before = folder_bytes(self.target)
+        inode = self.target.stat().st_ino
+        result = self.run_script(XCODE, "--from", self.source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("non-image folder", result.stderr)
+        self.assertEqual(folder_bytes(self.target), before)
+        self.assertEqual(self.target.stat().st_ino, inode)
+        self.assertEqual(list(self.target.parent.glob(".ddi-*")), [])
+
     def test_unmarked_image_targets_can_be_replaced(self):
         for apple_paths in (False, True):
             with self.subTest(apple_paths=apple_paths):
@@ -963,6 +1051,27 @@ class DdiScriptsTests(unittest.TestCase):
         self.assertEqual(result.stderr, "")
 
     @unittest.skipUnless(shutil.which("git"), "git is not installed")
+    def test_tarball_inside_outer_git_tree_warns_and_proceeds(self):
+        shutil.rmtree(self.checkout / ".git")
+        self.git("init", "--quiet", self.root)
+        self.git("-C", self.root, "add", "pins.txt")
+        self.env["GIT_CEILING_DIRECTORIES"] = str(self.root.parent)
+        result = self.run_script(XCODE, "--from", self.source)
+        self.assert_ready(result, self.target)
+        self.assertEqual(result.stderr.count("another git work tree"), 2)
+        for path in (self.target, self.source):
+            self.assertIn(f"warning: image folder is inside another git work tree: {path}\n",
+                          result.stderr)
+
+    @unittest.skipUnless(shutil.which("git"), "git is not installed")
+    def test_untracked_script_in_git_tree_warns_and_proceeds(self):
+        self.git("-C", self.checkout, "rm", "--cached", "scripts/ddi-lib.sh")
+        target = self.checkout / "images"
+        result = self.run_script(XCODE, "--from", self.source, "--dir", target)
+        self.assert_ready(result, target)
+        self.assertEqual(result.stderr, f"warning: image folder is inside another git work tree: {target}\n")
+
+    @unittest.skipUnless(shutil.which("git"), "git is not installed")
     def test_gitignore_covers_image_files(self):
         paths = ["Image.dmg", "Image.dmg.signature", "Image.dmg.trustcache", "Image.dmg.other",
                  "Firmware/x.trustcache", "Firmware/x.cryptex_info", "Firmware/x.root_hash",
@@ -973,13 +1082,14 @@ class DdiScriptsTests(unittest.TestCase):
     def test_stale_staging_folders_are_removed(self):
         self.target.parent.mkdir(parents=True)
         stale_time = time.time() - 601
-        for name in (".ddi-new.abcd12", ".ddi-old.abcd12"):
+        for name in (".ddi-new.abcd12", ".ddi-old.abcd12", ".ddi-old.recent"):
             folder = self.target.parent / name
             folder.mkdir()
             (folder / "partial").write_bytes(b"interrupted install")
-            os.utime(folder, (stale_time, stale_time))
+            if not name.endswith("recent"):
+                os.utime(folder, (stale_time, stale_time))
         keep = []
-        for name in (".ddi-new.recent", ".ddi-old.recent", "unrelated"):
+        for name in (".ddi-new.recent", "unrelated"):
             folder = self.target.parent / name
             folder.mkdir()
             (folder / "keep").write_bytes(b"keep me")
@@ -990,11 +1100,73 @@ class DdiScriptsTests(unittest.TestCase):
         os.utime(symlink, (stale_time, stale_time), follow_symlinks=False)
         result = self.run_script(XCODE, "--from", self.source)
         self.assert_ready(result, self.target)
-        for name in (".ddi-new.abcd12", ".ddi-old.abcd12"):
+        for name in (".ddi-new.abcd12", ".ddi-old.abcd12", ".ddi-old.recent"):
             self.assertFalse((self.target.parent / name).exists())
         for folder in keep:
             self.assertEqual(folder_bytes(folder), {"keep": b"keep me"})
         self.assertTrue(symlink.is_symlink())
+
+    def test_missing_target_is_restored_before_install(self):
+        self.assert_ready(self.run_script(XCODE, "--from", self.source), self.target)
+        old = self.target.parent / ".ddi-old.restore"
+        self.target.rename(old)
+        stale_time = time.time() - 601
+        os.utime(old, (stale_time, stale_time))
+        real_mv = shutil.which("mv")
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        fake_mv = fake_bin / "mv"
+        fake_mv.write_text('#!/usr/bin/env bash\nset -euo pipefail\n'
+                           'printf "%s\\n" "$1" "$2" >> "$DDI_TEST_MOVES"\n'
+                           'exec "$DDI_TEST_MV" "$@"\n')
+        fake_mv.chmod(0o755)
+        moves = self.root / "moves.txt"
+        self.env["DDI_TEST_MOVES"] = str(moves)
+        self.env["DDI_TEST_MV"] = real_mv
+        self.env["PATH"] = str(fake_bin) + os.pathsep + self.env["PATH"]
+        result = self.run_script(XCODE, "--from", self.source)
+        self.assert_ready(result, self.target)
+        paths = moves.read_text().splitlines()
+        self.assertEqual(paths[:2], [str(old), str(self.target)])
+        self.assertEqual(paths[2], str(self.target))
+        self.assertTrue(Path(paths[3]).name.startswith(".ddi-old."))
+        self.assertTrue(Path(paths[4]).name.startswith(".ddi-new."))
+        self.assertEqual(paths[5:], [str(self.target)])
+        self.assertEqual(list(self.target.parent.glob(".ddi-*")), [])
+
+    def test_stale_sweep_restores_newest_valid_old_folder_and_keeps_others(self):
+        self.assert_ready(self.run_script(XCODE, "--from", self.source), self.target)
+        backups = [self.target.parent / (".ddi-old." + name)
+                   for name in ("oldest", "newest-valid", "invalid")]
+        for index, backup in enumerate(backups):
+            shutil.copytree(self.target, backup)
+            timestamp = time.time() - 900 + index * 100
+            os.utime(backup, (timestamp, timestamp))
+        (backups[-1] / "Image.dmg").write_bytes(b"")
+        newest_inode = backups[1].stat().st_ino
+        shutil.rmtree(self.target)
+        (self.source / "BuildManifest.plist").unlink()
+        result = self.run_script(XCODE, "--from", self.source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(folder_bytes(self.target), installed_bytes(self.expected))
+        self.assertEqual(self.target.stat().st_ino, newest_inode)
+        self.assertEqual(folder_bytes(backups[0]), installed_bytes(self.expected))
+        self.assertTrue(backups[-1].is_dir())
+        self.assertFalse(backups[1].exists())
+
+    def test_stale_sweep_preserves_old_folders_when_target_exists(self):
+        self.assert_ready(self.run_script(XCODE, "--from", self.source), self.target)
+        for name in (".ddi-old.stale", ".ddi-old.recent"):
+            backup = self.target.parent / name
+            shutil.copytree(self.target, backup)
+            if name.endswith("stale"):
+                timestamp = time.time() - 601
+                os.utime(backup, (timestamp, timestamp))
+        (self.source / "BuildManifest.plist").unlink()
+        result = self.run_script(XCODE, "--from", self.source)
+        self.assertNotEqual(result.returncode, 0)
+        for name in (".ddi-old.stale", ".ddi-old.recent"):
+            self.assertEqual(folder_bytes(self.target.parent / name), installed_bytes(self.expected))
 
     def test_stale_cleanup_runs_before_validation(self):
         self.target.parent.mkdir(parents=True)
